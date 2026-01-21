@@ -1,45 +1,46 @@
 import {world, system} from "@minecraft/server";
 
-const object = new Map();
+const obj = new Map();
 
 system.run(() => {world.gameRules.naturalRegeneration = false;});
 system.runInterval(() => {{for (const player of world.getPlayers()) healthSystem(player);}}, 1);
 
-world.afterEvents.playerLeave.subscribe(event => {object.delete(event.playerId);});
+world.afterEvents.playerLeave.subscribe(event => {obj.delete(event.playerId);});
 
-function healthSystem(player)
-{
+function healthSystem(player) {
     if (!player) return;
 
-    const health = player.getComponent( "minecraft:health" );
+    const health = player.getComponent("minecraft:health");
 
     if (health.currentValue >= health.effectiveMax) return;
 
-    // minecraft:food is the newer component, but it's not invited to sit at the cool kids' table with me.
     const hunger = player.getComponent("minecraft:player.hunger");
     const saturation = player.getComponent("minecraft:player.saturation");
+    const exhaustion = player.getComponent("minecraft:player.exhaustion");
 
-    let session = object.get(player.id);
+    let struct = obj.get(player.id);
 
-    if (!session) {
-        session = {tick: 0};
-        object.set(player.id, session);
+    if (!struct) {
+        struct = {timer: 0};
+        obj.set(player.id, struct);
     }
 
-    session.tick++;
+    struct.timer++;
 
-    if (hunger.currentValue >= hunger.effectiveMax && saturation.currentValue >= 1 && session.tick >= 10) {
+    if (hunger.currentValue >= (hunger.effectiveMax - 2) && saturation.currentValue > 0 && struct.timer >= 20) {
         health.setCurrentValue(Math.min((health.currentValue + 1), health.effectiveMax));
         saturation.setCurrentValue(Math.max(0, (saturation.currentValue - 1)));
+        exhaustion.setCurrentValue(Math.min((exhaustion.currentValue + 3), exhaustion.effectiveMax));
 
-        session.tick = 0;
+        struct.timer = 0;
         return;
     }
 
-    if (hunger.currentValue >= (hunger.effectiveMax - 2) && session.tick >= 80) {
+    if (hunger.currentValue >= (hunger.effectiveMax - 2) && saturation.currentValue <= 0 && struct.timer >= 80) {
         health.setCurrentValue(Math.min((health.currentValue + 1), health.effectiveMax));
-        hunger.setCurrentValue(Math.max(0, (hunger.currentValue - 1)));
+        saturation.setCurrentValue(Math.max(0, (saturation.currentValue - 1)));
+        exhaustion.setCurrentValue(Math.min((exhaustion.currentValue + 3), exhaustion.effectiveMax));
 
-        session.tick = 0;
+        struct.timer = 0;
     }
 }
