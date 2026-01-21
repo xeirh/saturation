@@ -1,46 +1,69 @@
-import {world, system} from "@minecraft/server";
+// https://github.com/xeirh
 
-const obj = new Map();
+import { world, system } from "@minecraft/server";
 
-system.run(() => {world.gameRules.naturalRegeneration = false;});
-system.runInterval(() => {{for (const player of world.getPlayers()) healthSystem(player);}}, 1);
+const object = new Map();
 
-world.afterEvents.playerLeave.subscribe(event => {obj.delete(event.playerId);});
+//
+system.run(() => {
+    try {
+        world.gameRules.naturalRegeneration = false;
+    } catch (param) {
+        console.warn("Failure:", param);
+    }
+});
 
-function healthSystem(player) {
+//
+system.runInterval(() => {
+    for (const player of world.getPlayers()) {
+        try {
+            naturalRegeneration(player);
+        } catch (param) {
+            console.warn(`Failure Interval: ${player.name}`, param);
+        }
+    }
+}, 1);
+
+//
+function naturalRegeneration(player) {
     if (!player) return;
 
     const health = player.getComponent("minecraft:health");
+    const hunger = player.getComponent("minecraft:player.hunger");
 
     if (health.currentValue >= health.effectiveMax) return;
 
-    const hunger = player.getComponent("minecraft:player.hunger");
     const saturation = player.getComponent("minecraft:player.saturation");
     const exhaustion = player.getComponent("minecraft:player.exhaustion");
 
-    let struct = obj.get(player.id);
+    let current = object.get(player.id);
 
-    if (!struct) {
-        struct = {timer: 0};
-        obj.set(player.id, struct);
+    if (!current) {
+        current = {ticking: 0};
+        object.set(player.id, current);
     }
 
-    struct.timer++;
+    current.ticking++;
 
-    if (hunger.currentValue >= (hunger.effectiveMax - 2) && saturation.currentValue > 0 && struct.timer >= 20) {
+    if (hunger.currentValue >= (hunger.effectiveMax - 2) && saturation.currentValue > 0 && current.ticking >= 20) {
         health.setCurrentValue(Math.min((health.currentValue + 1), health.effectiveMax));
         saturation.setCurrentValue(Math.max(0, (saturation.currentValue - 1)));
         exhaustion.setCurrentValue(Math.min((exhaustion.currentValue + 3), exhaustion.effectiveMax));
 
-        struct.timer = 0;
+        current.ticking = 0;
         return;
     }
 
-    if (hunger.currentValue >= (hunger.effectiveMax - 2) && saturation.currentValue <= 0 && struct.timer >= 80) {
+    if (hunger.currentValue >= (hunger.effectiveMax - 2) && saturation.currentValue <= 0 && current.ticking >= 80) {
         health.setCurrentValue(Math.min((health.currentValue + 1), health.effectiveMax));
         saturation.setCurrentValue(Math.max(0, (saturation.currentValue - 1)));
         exhaustion.setCurrentValue(Math.min((exhaustion.currentValue + 3), exhaustion.effectiveMax));
 
-        struct.timer = 0;
+        current.ticking = 0;
     }
 }
+
+//
+world.afterEvents.playerLeave.subscribe(event => {
+    object.delete(event.playerId);
+});
